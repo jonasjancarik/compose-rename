@@ -36,9 +36,9 @@ Test first with `--dry-run`. Requires Docker CLI and PyYAML.
 - **--new-name NAME**: Required. The new Compose project name. This is written to the compose file as `name:` and serves as the prefix for resources (e.g., volumes become `newname_<volume_key>`).
 - **--old-name NAME**: Optional. Override auto-detected OLD project name. Detection order (if not provided): `name:` in compose → `.env` `COMPOSE_PROJECT_NAME` → directory name.
 - **--mode labels|prefix|auto**: How to discover volumes to migrate.
-  - `labels` (default): Uses `com.docker.compose.project=<old>` labels. Migrates volumes that Compose created.
+  - `auto` (default): Tries `labels` first; if none found, safely falls back to `prefix` but only for volume keys declared in the compose file under `volumes:` that are not marked `external: true`. This avoids migrating unrelated/external volumes.
+  - `labels`: Uses `com.docker.compose.project=<old>` labels. Migrates volumes that Compose created.
   - `prefix`: Matches volumes named `<old>_...`. Useful when labels are missing (e.g., Swarm) or for external volumes following the prefix convention. Be cautious: this can include non-Compose/external volumes.
-  - `auto`: Tries `labels` first; if none found, safely falls back to `prefix` but only for volume keys declared in the compose file under `volumes:` that are not marked `external: true`. This avoids migrating unrelated/external volumes.
 - **--dry-run**: Prints the full plan and performs read-only Docker queries (volume list/inspect), but makes no changes: no `down`, no creates, no copy, no file writes, no directory rename, no `up`.
 - **--skip-down**: Skip `docker compose down` on the OLD project. Without `--dry-run`, migration still occurs (creates/copies/compose file write). Use with caution if the old stack is running.
 - **--up-after**: After migrating and updating the compose file, bring up the NEW project with `docker compose up -d`.
