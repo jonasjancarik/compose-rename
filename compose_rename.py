@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-compose_rename.py — Rename a Docker Compose project by *migrating volumes*
-(Option B: create new volumes with the new project prefix and copy data over)
+compose_rename.py — Rename a Docker Compose project by migrating volumes
+to a new project prefix.
 
 What it does:
   1) Detect OLD project name (compose `name:`, .env COMPOSE_PROJECT_NAME, or directory name).
@@ -11,9 +11,12 @@ What it does:
   3) Discover all Compose-managed volumes for the OLD project (by label, or by name prefix).
   4) Create new volumes (same driver/options) named NEWPROJECT_<volume_key>.
   5) Copy data from old -> new via an ephemeral Alpine container and `tar`.
-  6) Update the compose file to set `name: NEWPROJECT`.
-  7) Optionally rename the project directory to NEWPROJECT.
-  8) Optionally bring up the NEW stack.
+  6) Project naming flow (interactive by default):
+     - Default: rename the project directory to NEWPROJECT and DO NOT modify the compose file.
+       Docker Compose will then use the directory name as the project name (unless overridden).
+     - Alternative: update the compose file to set `name: NEWPROJECT` and do NOT rename the directory.
+       Useful if you want a fixed project name independent of the directory or when using `-p/--project-name`.
+  7) Optionally bring up the NEW stack.
 
 Notes:
   - By default, only Compose-managed volumes are migrated (those created by Compose).
@@ -355,10 +358,17 @@ def main():
         action="store_true",
         help="Run 'docker compose up -d' for the NEW project after migration.",
     )
+    # Behavioral choice: default flow is to rename directory and NOT modify compose.
+    # Users can opt-in to editing compose instead, or force rename without prompt.
     ap.add_argument(
         "--rename-dir",
         action="store_true",
-        help="Rename the project directory to NEW_NAME at the end.",
+        help="Prefer: rename the project directory to NEW_NAME and DO NOT modify compose (default if you don't choose).",
+    )
+    ap.add_argument(
+        "--edit-compose",
+        action="store_true",
+        help="Prefer: update the compose file to set name: NEW_NAME and DO NOT rename the directory.",
     )
     ap.add_argument(
         "--force-overwrite",
@@ -400,6 +410,67 @@ def main():
     if old_project == new_project:
         print("Old and new project names are the same. Nothing to do.", file=sys.stderr)
         sys.exit(1)
+
+    # Decide behavior: rename directory (default) vs edit compose
+    if args.rename_dir and args.edit_compose:
+        print(
+            "ERROR: --rename-dir and --edit-compose are mutually exclusive.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    has_explicit_project = bool(
+        (isinstance(compose_obj, dict) and compose_obj.get("name"))
+        or dotenv.get("COMPOSE_PROJECT_NAME")
+    )
+    do_rename_dir = False
+    do_edit_compose = False
+    if args.rename_dir:
+        do_rename_dir = True
+    elif args.edit_compose:
+        do_edit_compose = True
+    else:
+        # Interactive choice, unless dry-run (then default to rename-dir)
+        if args.dry_run:
+            print(
+                "DRY-RUN: defaulting to directory rename and leaving compose file untouched."
+            )
+            do_rename_dir = True
+        else:
+            print("\nProject naming choice:")
+            print(
+                "  [Enter] Rename the project directory to the NEW name and DO NOT modify the compose file (default)."
+            )
+            print(
+                "           Docker Compose will then use the directory name as the project name,"
+            )
+            print(
+                "           unless you override it with `name:` in compose, COMPOSE_PROJECT_NAME in .env, or `-p` at runtime."
+            )
+            print(
+                "  [e]     Edit the compose file to set `name: NEW_NAME` and DO NOT rename the directory."
+            )
+            print(
+                "           Choose this if you want a fixed project name independent of the directory,"
+            )
+            print(
+                "           or if you routinely run with `docker compose -p/--project-name`."
+            )
+            if has_explicit_project:
+                print(
+                    "\nNOTE: Your project currently sets an explicit project name (compose `name:` or .env `COMPOSE_PROJECT_NAME`)."
+                )
+                print(
+                    "      Renaming only the directory will NOT change the project name Compose uses unless you remove/ignore those."
+                )
+            choice = (
+                input("\nProceed with default directory rename? [Enter/e]: ")
+                .strip()
+                .lower()
+            )
+            if choice == "e":
+                do_edit_compose = True
+            else:
+                do_rename_dir = True
 
     if not args.skip_down:
         print("Stopping old stack (down)...")
@@ -505,12 +576,15 @@ def main():
         print("Copying data ...")
         copy_volume_data(ov, nv, dry_run=args.dry_run)
 
-    # Update compose name
-    updated_compose = update_compose_project_name(compose_obj, new_project)
-    save_compose(compose_path, updated_compose, backup=True, dry_run=args.dry_run)
+    # Apply chosen project naming action
+    if do_edit_compose:
+        updated_compose = update_compose_project_name(compose_obj, new_project)
+        save_compose(compose_path, updated_compose, backup=True, dry_run=args.dry_run)
+    else:
+        print("Leaving compose file unchanged.")
 
-    # Optionally rename directory
-    if args.rename_dir:
+    # Optionally rename directory (default path)
+    if do_rename_dir:
         old_dir = project_dir
         new_dir = project_dir.with_name(new_project)
         try:
