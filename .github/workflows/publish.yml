@@ -1,0 +1,50 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Verify tag matches pyproject version
+        run: |
+          python - <<'PY'
+          import sys, tomllib, os
+          with open("pyproject.toml", "rb") as f:
+              data = tomllib.load(f)
+          version = data["project"]["version"]
+          ref = os.environ.get("GITHUB_REF", "")
+          tag = ref.split("/")[-1]
+          tag_version = tag[1:] if tag.startswith("v") else tag
+          if version != tag_version:
+              print(f"Tag {tag} does not match pyproject version {version}", file=sys.stderr)
+              sys.exit(1)
+          print(f"Version verified: {version}")
+          PY
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        env:
+          UV_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish
+
+
