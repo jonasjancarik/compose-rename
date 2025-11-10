@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -47,6 +47,13 @@ jobs:
         with:
           name: dist-${{ github.ref_name }}
           path: dist/*
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
 
       - name: Publish to PyPI
         env:
