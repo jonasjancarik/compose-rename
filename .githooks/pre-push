@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build local dist artifacts when pushing version tags (refs/tags/v*)
+# This keeps freshly built wheels/sdists available locally for manual `uv publish`.
+
+build_needed=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "${local_ref:-}" == refs/tags/v* ]]; then
+    build_needed=1
+  fi
+done
+
+if [[ "$build_needed" -eq 1 ]]; then
+  echo "[pre-push] Detected tag push. Building dist with uv ..."
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "[pre-push] uv not found in PATH; skipping local build." >&2
+    exit 0
+  fi
+  rm -rf dist
+  uv build
+  echo "[pre-push] Built dist/ artifacts."
+fi
+
+
