@@ -71,9 +71,8 @@ def run(
 
 
 def docker_json(cmd: List[str], dry_run: bool = False):
-    rc, out, _ = run(cmd, check=True, capture=True, dry_run=dry_run)
-    if dry_run:
-        return {}
+    # Allow read-only docker queries even during dry-run
+    rc, out, _ = run(cmd, check=True, capture=True, dry_run=False)
     try:
         return json.loads(out)
     except json.JSONDecodeError:
@@ -81,9 +80,8 @@ def docker_json(cmd: List[str], dry_run: bool = False):
 
 
 def docker_text_lines(cmd: List[str], dry_run: bool = False) -> List[str]:
-    rc, out, _ = run(cmd, check=True, capture=True, dry_run=dry_run)
-    if dry_run:
-        return []
+    # Allow read-only docker queries even during dry-run
+    rc, out, _ = run(cmd, check=True, capture=True, dry_run=False)
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
