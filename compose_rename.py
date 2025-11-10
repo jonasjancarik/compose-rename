@@ -335,9 +335,10 @@ def main():
     )
     ap.add_argument(
         "--mode",
-        choices=["labels", "prefix"],
+        choices=["labels", "prefix", "auto"],
         default="labels",
-        help="How to discover volumes to migrate. 'labels' (default) uses compose labels; 'prefix' matches name OLD_*.",
+        help="How to discover volumes to migrate. 'labels' (default) uses compose labels; "
+        "'prefix' matches name OLD_*; 'auto' tries labels then safely falls back to prefix for declared non-external volumes.",
     )
     ap.add_argument(
         "--dry-run",
@@ -409,16 +410,30 @@ def main():
         print("Skipping 'docker compose down' per --skip-down")
 
     # Discover volumes
+    discovery_mode = args.mode
     if args.mode == "labels":
         old_vols = list_project_volumes_by_labels(old_project, dry_run=args.dry_run)
-    else:
+    elif args.mode == "prefix":
         old_vols = list_project_volumes_by_prefix(old_project, dry_run=args.dry_run)
+    else:  # auto
+        old_vols = list_project_volumes_by_labels(old_project, dry_run=args.dry_run)
+        if not old_vols:
+            print("No volumes found via labels; falling back to prefix (safe, declared volumes only).")
+            old_vols = list_project_volumes_by_prefix(old_project, dry_run=args.dry_run)
+            discovery_mode = "auto-prefix"
 
     if not old_vols:
         print(
             "No project volumes found for migration. If you expected some, try --mode prefix.",
             file=sys.stderr,
         )
+
+    # Compute allowed volume keys from compose for safe auto fallback
+    compose_vols = compose_obj.get("volumes") or {}
+    allowed_declared_keys = {
+        str(k) for k, v in (compose_vols.items() if isinstance(compose_vols, dict) else [])
+        if not (isinstance(v, dict) and v.get("external") is True)
+    }
 
     # Build mapping: old volume name -> (new volume name, volume_key)
     mapping: Dict[str, Tuple[str, str]] = {}
@@ -433,6 +448,10 @@ def main():
                 f"WARNING: Could not determine volume key for {ov}. Skipping.",
                 file=sys.stderr,
             )
+            continue
+        # In auto fallback, restrict to declared non-external volume keys to avoid migrating unrelated/external volumes.
+        if discovery_mode == "auto-prefix" and allowed_declared_keys and vol_key not in allowed_declared_keys:
+            print(f"Skipping {ov} (key '{vol_key}') not declared as a non-external volume in compose.")
             continue
         nv = f"{new_project}_{vol_key}"
         mapping[ov] = (nv, vol_key)
