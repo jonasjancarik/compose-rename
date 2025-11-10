@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourname/compose-rename"
+Homepage = "https://github.com/jonasjancarik/compose-rename"
 
 [project.scripts]
 compose-rename = "compose_rename:main"

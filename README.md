@@ -13,7 +13,7 @@ uvx compose-rename --help
 - From a Git repository (without publishing yet):
 
 ```bash
-uvx --from git+https://github.com/yourname/compose-rename compose-rename --help
+uvx --from git+https://github.com/jonasjancarik/compose-rename@main compose-rename --help
 ```
 
 ## Usage
