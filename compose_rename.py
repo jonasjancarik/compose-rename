@@ -33,12 +33,31 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 try:
+    # Python 3.8+: prefer importlib.metadata for installed package version
+    from importlib.metadata import version as pkg_version  # type: ignore
+except Exception:  # pragma: no cover
+    pkg_version = None  # type: ignore
+
+try:
     import yaml  # PyYAML
 except ImportError:
     print(
         "ERROR: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr
     )
     sys.exit(2)
+
+
+def get_package_version() -> str:
+    """
+    Return the installed distribution version if available, otherwise 'unknown'.
+    This avoids hardcoding the version in the source.
+    """
+    try:
+        if pkg_version is not None:
+            return str(pkg_version("compose-rename"))
+    except Exception:
+        pass
+    return "unknown"
 
 
 def run(
@@ -344,6 +363,13 @@ def main():
         "--force-overwrite",
         action="store_true",
         help="If a destination volume already exists, copy into it anyway (overwrites files with same names).",
+    )
+    ap.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {get_package_version()}",
+        help="Print version and exit.",
     )
     args = ap.parse_args()
 
