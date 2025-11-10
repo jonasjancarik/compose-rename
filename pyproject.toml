@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "compose-rename"
+version = "0.1.0"
+description = "Rename a Docker Compose project by migrating volumes to a new project prefix."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+  { name = "Your Name" }
+]
+dependencies = [
+  "pyyaml>=6.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourname/compose-rename"
+
+[project.scripts]
+compose-rename = "compose_rename:main"
+
+
