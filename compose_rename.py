@@ -280,6 +280,53 @@ def update_compose_project_name(compose: Dict, new_project: str) -> Dict:
     data["name"] = new_project
     return data
 
+def modify_compose_with_modes(
+    compose: Dict,
+    project_name_mode: str,
+    volume_name_mode: str,
+    old_project: str,
+    new_project: str,
+) -> Dict:
+    """
+    Apply modifications to the compose object based on selected modes:
+      - project_name_mode: 'set' | 'remove' | 'keep'
+      - volume_name_mode: 'update' | 'remove' | 'keep'
+    Only non-external volumes are considered for volume name updates/removals.
+    """
+    data = dict(compose) if compose else {}
+
+    # Project name handling
+    if project_name_mode == "set":
+        data["name"] = new_project
+    elif project_name_mode == "remove":
+        if "name" in data:
+            data.pop("name", None)
+    # 'keep' does nothing
+
+    # Volume 'name:' handling for declared, non-external volumes
+    vols = data.get("volumes")
+    if isinstance(vols, dict) and volume_name_mode in ("update", "remove"):
+        for vkey, vdef in vols.items():
+            if not isinstance(vdef, dict):
+                continue
+            is_external = bool(vdef.get("external") is True)
+            if is_external:
+                # Do not alter external volumes
+                continue
+            explicit_name = vdef.get("name")
+            if explicit_name is None:
+                continue
+            if volume_name_mode == "remove":
+                # Drop explicit name to let Compose auto-name with project prefix
+                vdef.pop("name", None)
+            elif volume_name_mode == "update":
+                # If explicit name starts with the old prefix, replace it
+                old_prefix = f"{old_project}_"
+                if isinstance(explicit_name, str) and explicit_name.startswith(old_prefix):
+                    vdef["name"] = f"{new_project}_{explicit_name[len(old_prefix):]}"
+                # else: leave as-is (not clearly tied to old prefix)
+    return data
+
 
 def rename_directory(old_dir: Path, new_dir: Path, dry_run: bool):
     if old_dir.resolve() == new_dir.resolve():
@@ -384,6 +431,22 @@ def main():
         "--edit-compose",
         action="store_true",
         help="Prefer: update the compose file to set name: NEW_NAME and DO NOT rename the directory.",
+    )
+    ap.add_argument(
+        "--project-name-mode",
+        choices=["auto", "set", "remove", "keep"],
+        default="auto",
+        help="How to handle compose 'name:' when an explicit name is detected. "
+        "'auto' (default) asks if explicit name exists; otherwise leaves untouched. "
+        "'set' writes name: NEW_NAME; 'remove' deletes name:; 'keep' leaves as-is.",
+    )
+    ap.add_argument(
+        "--volume-name-mode",
+        choices=["auto", "update", "remove", "keep"],
+        default="auto",
+        help="How to handle explicit volume 'name:' fields for non-external volumes. "
+        "'auto' (default) asks if explicit names exist; otherwise leaves untouched. "
+        "'update' replaces OLD_ prefix with NEW_; 'remove' deletes explicit names; 'keep' leaves as-is.",
     )
     ap.add_argument(
         "--force-overwrite",
@@ -515,6 +578,65 @@ def main():
             print(f"ERROR: Failed to clone directory: {e}", file=sys.stderr)
             sys.exit(1)
 
+    # After potential clone, re-load compose for inspections and interactive choices
+    try:
+        compose_obj = load_compose(compose_path)
+    except Exception:
+        pass
+    compose_has_explicit_name = isinstance(compose_obj, dict) and ("name" in compose_obj)
+    compose_vols = compose_obj.get("volumes") if isinstance(compose_obj, dict) else {}
+    non_external_explicit_volume_names = []
+    if isinstance(compose_vols, dict):
+        for k, v in compose_vols.items():
+            if isinstance(v, dict) and v.get("external") is not True and "name" in v:
+                non_external_explicit_volume_names.append(k)
+
+    # Determine project_name_mode and volume_name_mode (interactive if 'auto' and conditions met)
+    project_name_mode = args.project_name_mode
+    volume_name_mode = args.volume_name_mode
+    if project_name_mode == "auto" and compose_has_explicit_name and not args.dry_run:
+        print("\nAn explicit project name ('name:') is set in your compose file.")
+        print("Choose how to handle it in the NEW project:")
+        print("  [s] Set to NEW_NAME (recommended if you want a fixed project name)")
+        print("  [r] Remove it (recommended if you want directory-driven project name)")
+        print("  [k] Keep existing value (not recommended; may keep OLD name)")
+        choice = input("Project name handling [s/r/k] (default: s): ").strip().lower()
+        if choice == "r":
+            project_name_mode = "remove"
+        elif choice == "k":
+            project_name_mode = "keep"
+        else:
+            project_name_mode = "set"
+    elif project_name_mode == "auto":
+        # Nothing explicit to handle; leave untouched
+        project_name_mode = "keep"
+
+    if volume_name_mode == "auto" and non_external_explicit_volume_names and not args.dry_run:
+        print("\nExplicit volume 'name:' fields were found for non-external volumes:")
+        print("  " + ", ".join(non_external_explicit_volume_names))
+        print("Choose how to handle them in the NEW project:")
+        print("  [u] Update names (replace OLD_ prefix with NEW_)")
+        print("  [r] Remove explicit names (let Compose auto-prefix with project name)")
+        print("  [k] Keep as-is (not recommended if they reference OLD prefix)")
+        vchoice = input("Volume names handling [u/r/k] (default: u): ").strip().lower()
+        if vchoice == "r":
+            volume_name_mode = "remove"
+        elif vchoice == "k":
+            volume_name_mode = "keep"
+        else:
+            volume_name_mode = "update"
+    elif volume_name_mode == "auto":
+        # Nothing explicit to handle; leave untouched
+        volume_name_mode = "keep"
+
+    # Warn if .env enforces COMPOSE_PROJECT_NAME and user chose to 'remove' project name
+    if project_name_mode == "remove" and dotenv.get("COMPOSE_PROJECT_NAME"):
+        print(
+            "NOTE: .env contains COMPOSE_PROJECT_NAME, which will still force the project name.\n"
+            "      Remove/adjust it if you want directory-driven project naming.",
+            file=sys.stderr,
+        )
+
     # Discover volumes
     discovery_mode = args.mode
     if args.mode == "labels":
@@ -611,17 +733,19 @@ def main():
         print("Copying data ...")
         copy_volume_data(ov, nv, dry_run=args.dry_run)
 
-    # Apply chosen project naming action
-    if do_edit_compose:
-        # Re-load compose from current compose_path to ensure we edit the active file
-        try:
-            compose_obj = load_compose(compose_path)
-        except Exception:
-            pass
-        updated_compose = update_compose_project_name(compose_obj, new_project)
+    # Apply compose modifications if requested via flags or edit choice
+    # Re-load compose from current compose_path to ensure we edit the active file
+    try:
+        compose_obj = load_compose(compose_path)
+    except Exception:
+        pass
+    if do_edit_compose or project_name_mode in ("set", "remove") or volume_name_mode in ("update", "remove"):
+        updated_compose = modify_compose_with_modes(
+            compose_obj, project_name_mode, volume_name_mode, old_project, new_project
+        )
         save_compose(compose_path, updated_compose, backup=True, dry_run=args.dry_run)
     else:
-        print("Leaving compose file unchanged.")
+        print("Leaving compose file unchanged (no modifications requested).")
 
     # Optionally rename directory (default path)
     if do_rename_dir:

@@ -24,7 +24,11 @@ compose-rename \
   --new-name newproj \
   [--old-name oldproj] \
   [--mode labels|prefix|auto] \
-  [--dry-run] [--skip-down] [--up-after] [--rename-dir | --clone-dir | --edit-compose] [--force-overwrite]
+  [--dry-run] [--skip-down] [--up-after] \
+  [--rename-dir | --clone-dir | --edit-compose] \
+  [--project-name-mode auto|set|remove|keep] \
+  [--volume-name-mode auto|update|remove|keep] \
+  [--force-overwrite]
 ```
 
 Test first with `--dry-run`. Requires Docker CLI and PyYAML.
@@ -45,6 +49,16 @@ Test first with `--dry-run`. Requires Docker CLI and PyYAML.
 - **--rename-dir**: Prefer renaming the project directory to `--new-name` and DO NOT modify the compose file. This is the default choice if you don't specify a preference.
 - **--clone-dir**: Clone (copy) the project directory to `--new-name` and keep the original directory untouched. Volumes are still migrated by copying data from old to new. Combine with `--edit-compose` to set `name: --new-name` in the cloned compose file (recommended if your original project used an explicit name).
 - **--edit-compose**: Prefer editing the compose file to set `name: --new-name` and DO NOT rename the directory.
+- **--project-name-mode auto|set|remove|keep**: How to handle an explicit compose `name:` if present.
+  - `auto` (default): Ask if explicit name exists; otherwise keep.
+  - `set`: Write `name: --new-name`.
+  - `remove`: Delete `name:` so Compose uses directory-driven naming (unless overridden by `.env`).
+  - `keep`: Leave as-is.
+- **--volume-name-mode auto|update|remove|keep**: How to handle explicit volume `name:` for non-external volumes.
+  - `auto` (default): Ask if explicit names exist; otherwise keep.
+  - `update`: Replace `OLD_` prefix with `NEW_` for names starting with the old prefix.
+  - `remove`: Delete explicit names so Compose auto-prefixes with the project name.
+  - `keep`: Leave as-is.
 - **--force-overwrite**: If a destination volume already exists, copy into it anyway (files with the same names are overwritten). Without this, existing destination volumes are skipped.
 - **-V, --version**: Print the installed package version and exit.
 
@@ -79,6 +93,18 @@ compose-rename --project-dir /path/to/project --new-name newproj
 
 ```bash
 compose-rename --project-dir /path/to/project --new-name newproj --clone-dir --edit-compose
+```
+
+- When explicit `name:` or explicit volume names are present, choose behavior non-interactively:
+
+```bash
+# Set new project name and update explicit volume names
+compose-rename --project-dir /path/to/project --new-name newproj \
+  --project-name-mode set --volume-name-mode update
+
+# Remove explicit project name and remove explicit volume names
+compose-rename --project-dir /path/to/project --new-name newproj \
+  --project-name-mode remove --volume-name-mode remove
 ```
 
 - Migrate without stopping old stack first (not a check; performs migration):
