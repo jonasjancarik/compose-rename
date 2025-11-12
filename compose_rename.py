@@ -136,6 +136,37 @@ def read_dotenv(env_path: Path) -> Dict[str, str]:
     return env
 
 
+def remove_env_key(
+    env_path: Path, key: str, backup: bool = True, dry_run: bool = False
+) -> bool:
+    """
+    Remove a specific KEY=... definition from a .env file while preserving
+    comments and other lines. Returns True if a removal occurred.
+    """
+    if not env_path.exists():
+        return False
+    original = env_path.read_text(encoding="utf-8").splitlines()
+    removed = False
+    key_re = re.compile(rf"^\s*{re.escape(key)}\s*=")
+    filtered: List[str] = []
+    for line in original:
+        if key_re.match(line):
+            removed = True
+            continue
+        filtered.append(line)
+    if removed:
+        if backup and not dry_run:
+            bak = env_path.with_suffix(env_path.suffix + ".bak")
+            shutil.copy2(env_path, bak)
+            print(f"Backed up .env to: {bak}")
+        print(f"Updating .env at: {env_path}")
+        if not dry_run:
+            env_path.write_text(
+                "\n".join(filtered) + ("\n" if filtered else ""), encoding="utf-8"
+            )
+    return removed
+
+
 def default_compose_path(project_dir: Path) -> Path:
     candidates = [
         "compose.yaml",
@@ -280,6 +311,7 @@ def update_compose_project_name(compose: Dict, new_project: str) -> Dict:
     data["name"] = new_project
     return data
 
+
 def modify_compose_with_modes(
     compose: Dict,
     project_name_mode: str,
@@ -322,8 +354,10 @@ def modify_compose_with_modes(
             elif volume_name_mode == "update":
                 # If explicit name starts with the old prefix, replace it
                 old_prefix = f"{old_project}_"
-                if isinstance(explicit_name, str) and explicit_name.startswith(old_prefix):
-                    vdef["name"] = f"{new_project}_{explicit_name[len(old_prefix):]}"
+                if isinstance(explicit_name, str) and explicit_name.startswith(
+                    old_prefix
+                ):
+                    vdef["name"] = f"{new_project}_{explicit_name[len(old_prefix) :]}"
                 # else: leave as-is (not clearly tied to old prefix)
     return data
 
@@ -337,6 +371,7 @@ def rename_directory(old_dir: Path, new_dir: Path, dry_run: bool):
     print(f"Renaming directory: {old_dir} -> {new_dir}")
     if not dry_run:
         old_dir.rename(new_dir)
+
 
 def copy_directory(src_dir: Path, dst_dir: Path, dry_run: bool):
     if src_dir.resolve() == dst_dir.resolve():
@@ -438,7 +473,7 @@ def main():
         default="auto",
         help="How to handle compose 'name:' when an explicit name is detected. "
         "'auto' (default) asks if explicit name exists; otherwise leaves untouched. "
-        "'set' writes name: NEW_NAME; 'remove' deletes name:; 'keep' leaves as-is.",
+        "'set' writes name: NEW_NAME; 'remove' deletes name: and removes .env COMPOSE_PROJECT_NAME if present; 'keep' leaves as-is.",
     )
     ap.add_argument(
         "--volume-name-mode",
@@ -491,7 +526,10 @@ def main():
 
     # Decide behavior: rename/clone directory vs edit compose
     if args.clone_dir and args.rename_dir:
-        print("ERROR: --clone-dir and --rename-dir are mutually exclusive.", file=sys.stderr)
+        print(
+            "ERROR: --clone-dir and --rename-dir are mutually exclusive.",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if args.rename_dir and args.edit_compose:
         print(
@@ -519,10 +557,16 @@ def main():
         else:
             print("\nProject naming choice:")
             print("  [Enter] Rename the project directory to the NEW name (default).")
-            print("           Docker Compose will then use the directory name as the project name,")
-            print("           unless you override it with `name:` in compose, COMPOSE_PROJECT_NAME in .env, or `-p` at runtime.")
+            print(
+                "           Docker Compose will then use the directory name as the project name,"
+            )
+            print(
+                "           unless you override it with `name:` in compose, COMPOSE_PROJECT_NAME in .env, or `-p` at runtime."
+            )
             print("  [k]     Keep the directory name (no rename).")
-            print("           You'll be prompted (or can use flags) to set/remove/keep compose `name:` and volume names.")
+            print(
+                "           You'll be prompted (or can use flags) to set/remove/keep compose `name:` and volume names."
+            )
             if has_explicit_project:
                 print(
                     "\nNOTE: Your project currently sets an explicit project name (compose `name:` or .env `COMPOSE_PROJECT_NAME`)."
@@ -571,7 +615,9 @@ def main():
         compose_obj = load_compose(compose_path)
     except Exception:
         pass
-    compose_has_explicit_name = isinstance(compose_obj, dict) and ("name" in compose_obj)
+    compose_has_explicit_name = isinstance(compose_obj, dict) and (
+        "name" in compose_obj
+    )
     compose_vols = compose_obj.get("volumes") if isinstance(compose_obj, dict) else {}
     non_external_explicit_volume_names = []
     if isinstance(compose_vols, dict):
@@ -599,7 +645,11 @@ def main():
         # Nothing explicit to handle; leave untouched
         project_name_mode = "keep"
 
-    if volume_name_mode == "auto" and non_external_explicit_volume_names and not args.dry_run:
+    if (
+        volume_name_mode == "auto"
+        and non_external_explicit_volume_names
+        and not args.dry_run
+    ):
         print("\nExplicit volume 'name:' fields were found for non-external volumes:")
         print("  " + ", ".join(non_external_explicit_volume_names))
         print("Choose how to handle them in the NEW project:")
@@ -617,13 +667,28 @@ def main():
         # Nothing explicit to handle; leave untouched
         volume_name_mode = "keep"
 
-    # Warn if .env enforces COMPOSE_PROJECT_NAME and user chose to 'remove' project name
-    if project_name_mode == "remove" and dotenv.get("COMPOSE_PROJECT_NAME"):
-        print(
-            "NOTE: .env contains COMPOSE_PROJECT_NAME, which will still force the project name.\n"
-            "      Remove/adjust it if you want directory-driven project naming.",
-            file=sys.stderr,
-        )
+    # If user chose to 'remove' project name, also remove COMPOSE_PROJECT_NAME from .env
+    if project_name_mode == "remove":
+        env_path = project_dir / ".env"
+        if dotenv.get("COMPOSE_PROJECT_NAME"):
+            if args.dry_run:
+                print(
+                    "DRY-RUN: Would remove COMPOSE_PROJECT_NAME from .env to allow directory-driven naming."
+                )
+            else:
+                did_remove = remove_env_key(
+                    env_path, "COMPOSE_PROJECT_NAME", backup=True, dry_run=False
+                )
+                if did_remove:
+                    print(
+                        "Removed COMPOSE_PROJECT_NAME from .env to allow directory-driven naming."
+                    )
+                else:
+                    print(
+                        "COMPOSE_PROJECT_NAME not found in .env at write time (nothing to remove)."
+                    )
+        else:
+            print("No COMPOSE_PROJECT_NAME in .env (nothing to remove).")
 
     # Discover volumes
     discovery_mode = args.mode
@@ -727,7 +792,11 @@ def main():
         compose_obj = load_compose(compose_path)
     except Exception:
         pass
-    if do_edit_compose or project_name_mode in ("set", "remove") or volume_name_mode in ("update", "remove"):
+    if (
+        do_edit_compose
+        or project_name_mode in ("set", "remove")
+        or volume_name_mode in ("update", "remove")
+    ):
         updated_compose = modify_compose_with_modes(
             compose_obj, project_name_mode, volume_name_mode, old_project, new_project
         )
