@@ -25,7 +25,7 @@ compose-rename \
   [--old-name oldproj] \
   [--mode labels|prefix|auto] \
   [--dry-run] [--skip-down] [--up-after] \
-  [--rename-dir | --clone-dir] \
+  [--rename-dir | --copy] \
   [--project-name-mode auto|set|remove|keep] \
   [--volume-name-mode auto|update|remove|keep] \
   [--force-overwrite]
@@ -47,7 +47,7 @@ Test first with `--dry-run`. Requires Docker CLI and PyYAML.
 - **--skip-down**: Skip `docker compose down` on the OLD project. Without `--dry-run`, migration still occurs (creates/copies/compose file write). Use with caution if the old stack is running.
 - **--up-after**: After migration, bring up the NEW project with `docker compose up -d`.
 - **--rename-dir**: Prefer renaming the project directory to `--new-name` and DO NOT modify the compose file. This is the default choice if you don't specify a preference.
-- **--clone-dir**: Clone (copy) the project directory to `--new-name` and keep the original directory untouched. Volumes are still migrated by copying data from old to new. 
+- **--copy**: Copy the project directory to `--new-name` and keep the original directory untouched. Volumes are still migrated by copying data from old to new. 
 - **--project-name-mode auto|set|remove|keep**: How to handle an explicit compose `name:` if present.
   - `auto` (default): Ask if explicit name exists; otherwise keep.
   - `set`: Write `name: --new-name`.
@@ -88,10 +88,10 @@ compose-rename --project-dir /path/to/project --new-name newproj --dry-run --mod
 compose-rename --project-dir /path/to/project --new-name newproj
 ```
 
-- Clone the project directory (keep the original intact) and edit the cloned compose:
+- Copy the project directory (keep the original intact) and edit the copied compose:
 
 ```bash
-compose-rename --project-dir /path/to/project --new-name newproj --clone-dir --edit-compose
+compose-rename --project-dir /path/to/project --new-name newproj --copy --edit-compose
 ```
 
 - When explicit `name:` or explicit volume names are present, choose behavior non-interactively:

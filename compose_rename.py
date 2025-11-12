@@ -458,9 +458,9 @@ def main():
         help="Prefer: rename the project directory to NEW_NAME and DO NOT modify compose (default if you don't choose).",
     )
     ap.add_argument(
-        "--clone-dir",
+        "--copy",
         action="store_true",
-        help="Clone the project directory to NEW_NAME (copy instead of rename). Original directory remains untouched.",
+        help="Copy the project directory to NEW_NAME (copy instead of rename). Original directory remains untouched.",
     )
     ap.add_argument(
         "--edit-compose",
@@ -524,10 +524,10 @@ def main():
         print("Old and new project names are the same. Nothing to do.", file=sys.stderr)
         sys.exit(1)
 
-    # Decide behavior: rename/clone directory vs edit compose
-    if args.clone_dir and args.rename_dir:
+    # Decide behavior: rename/copy directory vs edit compose
+    if args.copy and args.rename_dir:
         print(
-            "ERROR: --clone-dir and --rename-dir are mutually exclusive.",
+            "ERROR: --copy and --rename-dir are mutually exclusive.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -593,8 +593,8 @@ def main():
     else:
         print("Skipping 'docker compose down' per --skip-down")
 
-    # If cloning is requested, clone the directory now and switch context to the clone
-    if args.clone_dir:
+    # If copying is requested, copy the directory now and switch context to the copy
+    if args.copy:
         old_dir = project_dir
         new_dir = project_dir.with_name(new_project)
         try:
@@ -602,15 +602,15 @@ def main():
             project_dir = new_dir
             if compose_path.parent == old_dir:
                 compose_path = project_dir / compose_path.name
-            print(f"Project directory cloned. Using: {project_dir}")
-            # In clone mode, keep the original directory intact and do not rename.
-            # User can still choose whether to edit compose in the clone.
+            print(f"Project directory copied. Using: {project_dir}")
+            # In copy mode, keep the original directory intact and do not rename.
+            # User can still choose whether to edit compose in the copy.
             do_rename_dir = False
         except Exception as e:
-            print(f"ERROR: Failed to clone directory: {e}", file=sys.stderr)
+            print(f"ERROR: Failed to copy directory: {e}", file=sys.stderr)
             sys.exit(1)
 
-    # After potential clone, re-load compose for inspections and interactive choices
+    # After potential copy, re-load compose for inspections and interactive choices
     try:
         compose_obj = load_compose(compose_path)
     except Exception:
