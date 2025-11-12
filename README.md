@@ -24,7 +24,7 @@ compose-rename \
   --new-name newproj \
   [--old-name oldproj] \
   [--mode labels|prefix|auto] \
-  [--dry-run] [--skip-down] [--up-after] [--rename-dir | --edit-compose] [--force-overwrite]
+  [--dry-run] [--skip-down] [--up-after] [--rename-dir | --clone-dir | --edit-compose] [--force-overwrite]
 ```
 
 Test first with `--dry-run`. Requires Docker CLI and PyYAML.
@@ -43,6 +43,7 @@ Test first with `--dry-run`. Requires Docker CLI and PyYAML.
 - **--skip-down**: Skip `docker compose down` on the OLD project. Without `--dry-run`, migration still occurs (creates/copies/compose file write). Use with caution if the old stack is running.
 - **--up-after**: After migration, bring up the NEW project with `docker compose up -d`.
 - **--rename-dir**: Prefer renaming the project directory to `--new-name` and DO NOT modify the compose file. This is the default choice if you don't specify a preference.
+- **--clone-dir**: Clone (copy) the project directory to `--new-name` and keep the original directory untouched. Volumes are still migrated by copying data from old to new. Combine with `--edit-compose` to set `name: --new-name` in the cloned compose file (recommended if your original project used an explicit name).
 - **--edit-compose**: Prefer editing the compose file to set `name: --new-name` and DO NOT rename the directory.
 - **--force-overwrite**: If a destination volume already exists, copy into it anyway (files with the same names are overwritten). Without this, existing destination volumes are skipped.
 - **-V, --version**: Print the installed package version and exit.
@@ -72,6 +73,12 @@ compose-rename --project-dir /path/to/project --new-name newproj --dry-run --mod
 
 ```bash
 compose-rename --project-dir /path/to/project --new-name newproj
+```
+
+- Clone the project directory (keep the original intact) and edit the cloned compose:
+
+```bash
+compose-rename --project-dir /path/to/project --new-name newproj --clone-dir --edit-compose
 ```
 
 - Migrate without stopping old stack first (not a check; performs migration):

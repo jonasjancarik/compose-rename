@@ -291,6 +291,16 @@ def rename_directory(old_dir: Path, new_dir: Path, dry_run: bool):
     if not dry_run:
         old_dir.rename(new_dir)
 
+def copy_directory(src_dir: Path, dst_dir: Path, dry_run: bool):
+    if src_dir.resolve() == dst_dir.resolve():
+        print(f"Directory path unchanged: {src_dir}")
+        return
+    if dst_dir.exists():
+        raise RuntimeError(f"Target directory already exists: {dst_dir}")
+    print(f"Copying directory: {src_dir} -> {dst_dir}")
+    if not dry_run:
+        shutil.copytree(src_dir, dst_dir)
+
 
 def bring_up_new_stack(
     project_dir: Path, compose_path: Path, new_project: str, dry_run: bool
@@ -366,6 +376,11 @@ def main():
         help="Prefer: rename the project directory to NEW_NAME and DO NOT modify compose (default if you don't choose).",
     )
     ap.add_argument(
+        "--clone-dir",
+        action="store_true",
+        help="Clone the project directory to NEW_NAME (copy instead of rename). Original directory remains untouched.",
+    )
+    ap.add_argument(
         "--edit-compose",
         action="store_true",
         help="Prefer: update the compose file to set name: NEW_NAME and DO NOT rename the directory.",
@@ -411,7 +426,10 @@ def main():
         print("Old and new project names are the same. Nothing to do.", file=sys.stderr)
         sys.exit(1)
 
-    # Decide behavior: rename directory (default) vs edit compose
+    # Decide behavior: rename/clone directory vs edit compose
+    if args.clone_dir and args.rename_dir:
+        print("ERROR: --clone-dir and --rename-dir are mutually exclusive.", file=sys.stderr)
+        sys.exit(2)
     if args.rename_dir and args.edit_compose:
         print(
             "ERROR: --rename-dir and --edit-compose are mutually exclusive.",
@@ -479,6 +497,23 @@ def main():
         )
     else:
         print("Skipping 'docker compose down' per --skip-down")
+
+    # If cloning is requested, clone the directory now and switch context to the clone
+    if args.clone_dir:
+        old_dir = project_dir
+        new_dir = project_dir.with_name(new_project)
+        try:
+            copy_directory(old_dir, new_dir, dry_run=args.dry_run)
+            project_dir = new_dir
+            if compose_path.parent == old_dir:
+                compose_path = project_dir / compose_path.name
+            print(f"Project directory cloned. Using: {project_dir}")
+            # In clone mode, keep the original directory intact and do not rename.
+            # User can still choose whether to edit compose in the clone.
+            do_rename_dir = False
+        except Exception as e:
+            print(f"ERROR: Failed to clone directory: {e}", file=sys.stderr)
+            sys.exit(1)
 
     # Discover volumes
     discovery_mode = args.mode
@@ -578,6 +613,11 @@ def main():
 
     # Apply chosen project naming action
     if do_edit_compose:
+        # Re-load compose from current compose_path to ensure we edit the active file
+        try:
+            compose_obj = load_compose(compose_path)
+        except Exception:
+            pass
         updated_compose = update_compose_project_name(compose_obj, new_project)
         save_compose(compose_path, updated_compose, backup=True, dry_run=args.dry_run)
     else:
