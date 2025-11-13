@@ -3,6 +3,7 @@ Tests for volume-name-mode options (update, remove, keep).
 """
 import subprocess
 from pathlib import Path
+from typing import Tuple
 
 import pytest
 import yaml
@@ -16,7 +17,7 @@ def run_compose_rename(
     old_name: str = None,
     volume_name_mode: str = "auto",
     **kwargs,
-) -> tuple[int, str, str]:
+) -> Tuple[int, str, str]:
     """Run compose-rename command."""
     import sys
 

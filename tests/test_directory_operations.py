@@ -3,6 +3,7 @@ Tests for directory operations (rename vs copy).
 """
 import subprocess
 from pathlib import Path
+from typing import Tuple
 
 import pytest
 import yaml
@@ -17,7 +18,7 @@ def run_compose_rename(
     copy: bool = False,
     rename_dir: bool = False,
     **kwargs,
-) -> tuple[int, str, str]:
+) -> Tuple[int, str, str]:
     """Run compose-rename command."""
     import sys
 

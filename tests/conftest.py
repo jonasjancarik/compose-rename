@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pytest
 import yaml
@@ -23,9 +23,9 @@ def run_docker_compose(
     project_dir: Path,
     compose_file: str,
     project_name: str,
-    command: list[str],
+    command: List[str],
     check: bool = True,
-) -> tuple[int, str, str]:
+) -> Tuple[int, str, str]:
     """Run docker compose command and return (rc, stdout, stderr)."""
     cmd = [
         "docker",
@@ -55,7 +55,7 @@ def docker_volume_exists(volume_name: str) -> bool:
     return proc.returncode == 0
 
 
-def docker_volume_list() -> list[str]:
+def docker_volume_list() -> List[str]:
     """List all Docker volume names."""
     proc = subprocess.run(
         ["docker", "volume", "ls", "-q"], capture_output=True, text=True, check=True
@@ -395,7 +395,7 @@ volumes:
         pass
 
 
-def verify_volume_data(volume_name: str, expected_files: list[str]) -> bool:
+def verify_volume_data(volume_name: str, expected_files: List[str]) -> bool:
     """Verify that a volume contains expected files."""
     cmd = [
         "docker",

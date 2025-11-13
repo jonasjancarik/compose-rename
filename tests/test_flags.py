@@ -3,6 +3,7 @@ Tests for various flags (dry-run, skip-down, up-after, force-overwrite).
 """
 import subprocess
 from pathlib import Path
+from typing import Tuple
 
 import pytest
 
@@ -18,7 +19,7 @@ def run_compose_rename(
     up_after: bool = False,
     force_overwrite: bool = False,
     **kwargs,
-) -> tuple[int, str, str]:
+) -> Tuple[int, str, str]:
     """Run compose-rename command."""
     import sys
 
