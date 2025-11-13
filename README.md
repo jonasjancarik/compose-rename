@@ -140,6 +140,41 @@ docker volume ls --filter label=com.docker.compose.project=OLDPROJECT
 
 # Development
 
+## Testing
+
+The project includes a comprehensive test suite using pytest. Tests create real Docker Compose projects and volumes to verify functionality.
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with coverage report
+uv run pytest --cov=compose_rename --cov-report=html
+
+# Run specific test file
+uv run pytest tests/test_basic.py
+
+# Run with verbose output
+uv run pytest -v
+```
+
+### Test Coverage
+
+The test suite covers:
+- Volume discovery modes (labels, prefix, auto)
+- Volume name handling modes (update, remove, keep)
+- Directory operations (rename vs copy)
+- Command-line flags (dry-run, skip-down, up-after, force-overwrite)
+- Project name detection scenarios
+- Edge cases and error handling
+- Integration scenarios
+
+See `tests/README.md` for more details.
+
+**Note**: Tests require Docker to be installed and running.
+
 ## Automated publishing (GitHub Actions)
 
 This repository includes a workflow that publishes to PyPI whenever you push a tag like `vX.Y.Z`.
