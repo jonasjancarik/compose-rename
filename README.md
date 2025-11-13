@@ -2,18 +2,32 @@
 
 Rename a Docker Compose project by migrating volumes to a new project prefix.
 
-## Run with uvx (no install)
+## Run without installing
 
-- From PyPI:
+Run `compose-rename` without installing it:
+
+With uvx (from PyPI):
 
 ```bash
 uvx compose-rename --help
 ```
 
-- From a Git repository (for latest version, possibly ahead of PyPI):
+With uvx (from Git repository, for latest version, possibly ahead of PyPI):
 
 ```bash
 uvx --from git+https://github.com/jonasjancarik/compose-rename@main compose-rename --help
+```
+
+Or with pipx:
+
+```bash
+pipx run compose-rename --help
+```
+
+or
+
+```bash
+pipx run --spec git+https://github.com/jonasjancarik/compose-rename@main compose-rename --help
 ```
 
 ## Usage
@@ -30,39 +44,48 @@ compose-rename \
   [--force-overwrite]
 ```
 
-Test first with `--dry-run`. Requires Docker CLI and PyYAML.
+**Requirements**: Docker CLI and PyYAML.
+
+### Default behavior
+
+By default, the tool:
+1. Renames the project directory to the new name (`--new-name`)
+2. Removes any explicit project name (`name:`) from the compose file
+3. Removes `COMPOSE_PROJECT_NAME` from the `.env` file if present
+
+This enables **directory-driven naming** where Docker Compose derives the project name from the directory name. Use `--copy` to keep the original directory intact, or set explicit volume names with `--volume-name-mode`.
+
+**Always test first with `--dry-run`** to preview the migration plan before making changes.
 
 ### Options
 
-- **--project-dir PATH**: Absolute/relative path to the existing Compose project directory. The tool auto-detects the compose file inside this directory unless you set `--compose-file`.
-- **--compose-file PATH**: Optional explicit path to the compose file. If unset, it searches for `compose.yaml`, `compose.yml`, `docker-compose.yaml`, then `docker-compose.yml` in `--project-dir`.
-- **--new-name NAME**: Required. The new Compose project name (prefix for resources, e.g., volumes become `newname_<volume_key>`). By default, the tool removes any explicit project name from the compose file and `.env` file, allowing Docker Compose to use directory-driven naming.
-- **--old-name NAME**: Optional. Override auto-detected OLD project name. Detection order (if not provided): `name:` in compose → `.env` `COMPOSE_PROJECT_NAME` → directory name.
-- **--mode labels|prefix|auto**: How to discover volumes to migrate.
-  - `auto` (default): Tries `labels` first; if none found, safely falls back to `prefix` but only for volume keys declared in the compose file under `volumes:` that are not marked `external: true`. This avoids migrating unrelated/external volumes.
-  - `labels`: Uses `com.docker.compose.project=<old>` labels. Migrates volumes that Compose created.
-  - `prefix`: Matches volumes named `<old>_...`. Useful when labels are missing (e.g., Swarm) or for external volumes following the prefix convention. Be cautious: this can include non-Compose/external volumes.
-- **--dry-run**: Prints the full plan and performs read-only Docker queries (volume list/inspect), but makes no changes: no `down`, no creates, no copy, no file writes, no directory rename, no `up`.
-- **--skip-down**: Skip `docker compose down` on the OLD project. Without `--dry-run`, migration still occurs (creates/copies/compose file write). Use with caution if the old stack is running.
-- **--up-after**: After migration, bring up the NEW project with `docker compose up -d`.
-- **--rename-dir**: Rename the project directory to `--new-name`. This is the default behavior unless `--copy` is used. The tool will also remove any explicit project name (`name:`) from the compose file and `COMPOSE_PROJECT_NAME` from `.env` if present, allowing Docker Compose to use directory-driven naming.
-- **--copy**: Copy the project directory to `--new-name` and keep the original directory untouched. Volumes are still migrated by copying data from old to new. The tool will also remove any explicit project name from the copied compose file and `.env` if present.
-- **--volume-name-mode auto|update|remove|keep**: How to handle explicit volume `name:` for non-external volumes.
-  - `auto` (default): Ask if explicit names exist; otherwise keep.
-  - `update`: Replace `OLD_` prefix with `NEW_` for names starting with the old prefix.
-  - `remove`: Delete explicit names so Compose auto-prefixes with the project name.
-  - `keep`: Leave as-is.
-- **--force-overwrite**: If a destination volume already exists, copy into it anyway (files with the same names are overwritten). Without this, existing destination volumes are skipped.
-- **-V, --version**: Print the installed package version and exit.
+#### Required
 
-## Behavior and tips
+| Option | Description |
+|--------|-------------|
+| `--project-dir PATH` | Absolute/relative path to the existing Compose project directory. The tool auto-detects the compose file inside this directory unless you set `--compose-file`. |
+| `--new-name NAME` | The new Compose project name (prefix for resources, e.g., volumes become `newname_<volume_key>`). By default, the tool removes any explicit project name from the compose file and `.env` file, allowing Docker Compose to use directory-driven naming. |
 
-- **Dry run**: Performs read-only Docker queries (e.g., `docker volume ls`, `docker volume inspect`) to show a full plan. It does not stop stacks, create volumes, copy data, write files, or rename directories.
-- **Skip down**: Only prevents `docker compose down` on the OLD project. Without `--dry-run`, the tool will still create destination volumes, copy data, and update the compose file. Use with caution if the old stack is running (data may change during copy).
-- **Mode**:
-  - `labels` (default): Finds Compose-managed volumes by label `com.docker.compose.project=<old>`.
-  - `prefix`: Finds volumes by name prefix `<old>_...`. Useful when labels are missing (e.g., Swarm or externally created volumes).
-- **Default naming flow**: By default, after migrating volumes, the tool renames the project directory to the NEW name and removes any explicit project name (`name:`) from the compose file and `COMPOSE_PROJECT_NAME` from `.env` if present. This allows Docker Compose to use directory-driven naming, where the project name is derived from the directory name.
+#### Optional
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--compose-file PATH` | Auto-detect | Explicit path to the compose file. If unset, it searches for `compose.yaml`, `compose.yml`, `docker-compose.yaml`, then `docker-compose.yml` in `--project-dir`. |
+| `--old-name NAME` | Auto-detect | Override auto-detected OLD project name. If not provided, detection order is: `name:` in compose → `.env` `COMPOSE_PROJECT_NAME` → directory name. |
+| `--mode MODE` | `auto` | How to discover volumes to migrate. Values: `auto` (tries `labels` first, falls back to `prefix` for declared volumes), `labels` (uses `com.docker.compose.project=<old>` labels), `prefix` (matches volumes named `<old>_...` - use with caution as it can include non-Compose volumes). |
+| `--volume-name-mode MODE` | `auto` | How to handle explicit volume `name:` for non-external volumes. Values: `auto` (ask if explicit names exist, otherwise keep), `update` (replace `OLD_` prefix with `NEW_`), `remove` (delete explicit names for auto-prefixing), `keep` (leave as-is). |
+
+#### Flags
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--dry-run` | Disabled | Prints the full plan and performs read-only Docker queries (volume list/inspect), but makes no changes: no `down`, no creates, no copy, no file writes, no directory rename, no `up`. |
+| `--skip-down` | Disabled | Skip `docker compose down` on the OLD project. Without `--dry-run`, migration still occurs (creates/copies/compose file write). Use with caution if the old stack is running. |
+| `--up-after` | Disabled | After migration, bring up the NEW project with `docker compose up -d`. |
+| `--rename-dir` | Enabled* | Rename the project directory to `--new-name`. The tool will also remove any explicit project name (`name:`) from the compose file and `COMPOSE_PROJECT_NAME` from `.env` if present, allowing Docker Compose to use directory-driven naming. *Default unless `--copy` is used. |
+| `--copy` | Disabled | Copy the project directory to `--new-name` and keep the original directory untouched. Volumes are still migrated by copying data from old to new. The tool will also remove any explicit project name from the copied compose file and `.env` if present. |
+| `--force-overwrite` | Disabled | If a destination volume already exists, copy into it anyway (files with the same names are overwritten). Without this, existing destination volumes are skipped. |
+| `-V, --version` | — | Print the installed package version and exit. |
 
 ## Common commands
 
@@ -74,7 +97,7 @@ compose-rename --project-dir /path/to/project --new-name newproj --dry-run
 compose-rename --project-dir /path/to/project --new-name newproj --dry-run --mode prefix
 ```
 
-- Migrate safely (stop old stack first, default behavior removes project names):
+- Basic migration (stops old stack, migrates volumes, renames directory):
 
 ```bash
 compose-rename --project-dir /path/to/project --new-name newproj
@@ -98,7 +121,7 @@ compose-rename --project-dir /path/to/project --new-name newproj \
   --volume-name-mode remove
 ```
 
-- Migrate without stopping old stack first (not a check; performs migration):
+- Migrate without stopping old stack first (use with caution):
 
 ```bash
 compose-rename --project-dir /path/to/project --new-name newproj --skip-down
@@ -114,6 +137,8 @@ docker volume ls | grep '^OLDPROJECT_'
 # For labels mode
 docker volume ls --filter label=com.docker.compose.project=OLDPROJECT
 ```
+
+# Development
 
 ## Automated publishing (GitHub Actions)
 
@@ -138,6 +163,10 @@ Install a tagged version from Git directly (useful for testing or pinning):
 
 ```bash
 uvx --from git+https://github.com/jonasjancarik/compose-rename@vX.Y.Z compose-rename --version
+```
+
+```bash
+pipx run --spec git+https://github.com/jonasjancarik/compose-rename@vX.Y.Z compose-rename --version
 ```
 
 ## Local builds on tag push (optional)
