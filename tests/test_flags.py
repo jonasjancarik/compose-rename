@@ -5,8 +5,6 @@ Tests for various flags (dry-run, skip-down, up-after, force-overwrite).
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from tests.conftest import docker_volume_exists, run_docker_compose, unique_project_name
 
 

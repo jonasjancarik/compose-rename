@@ -1,32 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-compose_rename.py — Rename a Docker Compose project by migrating volumes
-to a new project prefix.
-
-What it does:
-  1) Detect OLD project name (compose `name:`, .env COMPOSE_PROJECT_NAME, or directory name).
-  2) `docker compose down` the OLD stack (keeps volumes).
-  3) Discover all Compose-managed volumes for the OLD project (by label, or by name prefix).
-  4) Create new volumes (same driver/options) named NEWPROJECT_<volume_key>.
-  5) Copy data from old -> new via an ephemeral Alpine container and `tar`.
-  6) Project naming flow (default behavior):
-     - Rename the project directory to NEWPROJECT.
-     - Remove any explicit project name (`name:`) from the compose file if present.
-     - Remove `COMPOSE_PROJECT_NAME` from `.env` file if present.
-     - This allows Docker Compose to use directory-driven naming, where the project name
-       is derived from the directory name.
-  7) Optionally bring up the NEW stack.
-
-Notes:
-  - By default, only Compose-managed volumes are migrated (those created by Compose).
-    External volumes are not touched unless you switch to `--mode prefix` and they match the OLD prefix.
-  - Networks are recreated automatically by Compose; there is no data to copy for networks.
-  - Test with `--dry-run` first. Ensure you have backups.
-  - Requires: Python 3.8+, PyYAML (`pip install pyyaml`), Docker CLI in PATH.
-"""
-
 import argparse
 import json
 import re
@@ -37,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 try:
-    # Python 3.8+: prefer importlib.metadata for installed package version
+    # Python 3.10+: prefer importlib.metadata for installed package version
     from importlib.metadata import version as pkg_version  # type: ignore
 except Exception:  # pragma: no cover
     pkg_version = None  # type: ignore
