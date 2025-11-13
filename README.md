@@ -181,11 +181,21 @@ This repository includes a workflow that publishes to PyPI whenever you push a t
 
 - Workflow file: `.github/workflows/publish.yml`
 - It verifies the tag matches `project.version` in `pyproject.toml`, builds with `uv build`, and publishes with `uv publish`.
-- The workflow uses the environment variable `UV_PYPI_TOKEN` and expects a repository secret named `PYPI_API_TOKEN`.
+- The workflow uses **PyPI trusted publishing** (OIDC) for authentication, which is more secure than API tokens.
 
-Setup (one-time):
-- In GitHub → Repository → Settings → Secrets and variables → Actions:
-  - Add a new repository secret `PYPI_API_TOKEN` with your PyPI API token.
+### Setup (one-time)
+
+1. **Configure trusted publishing on PyPI:**
+   - Go to your PyPI project → Settings → Publish → Add a new pending publisher
+   - Select "GitHub Actions" as the publisher type
+   - Enter your repository: `username/compose-rename` (or your actual GitHub username/repo)
+   - Enter the workflow filename: `publish.yml`
+   - Enter the environment: leave blank (or specify an environment name if you use one)
+   - Click "Add"
+
+2. **Verify workflow permissions:**
+   - The workflow file includes `id-token: write` permission, which is required for OIDC authentication
+   - This is already configured in `.github/workflows/publish.yml`
 
 Release steps:
 1. Bump version in `pyproject.toml`
