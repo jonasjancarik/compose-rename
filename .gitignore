@@ -2,6 +2,7 @@
 .coverage
 .coverage.*
 htmlcov/
+coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
