@@ -41,6 +41,3 @@ jobs:
     
     - name: Publish to PyPI
       run: uv publish
-      env:
-        # PyPI trusted publishing uses OIDC, no token needed
-        # The id-token: write permission enables this
