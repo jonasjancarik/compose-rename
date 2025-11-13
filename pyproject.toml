@@ -7,7 +7,7 @@ name = "compose-rename"
 version = "0.3.1"
 description = "Rename a Docker Compose project by migrating volumes to a new project prefix."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
   { name = "Your Name" }

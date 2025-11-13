@@ -3,7 +3,6 @@ Integration tests - end-to-end scenarios combining multiple features.
 """
 import subprocess
 from pathlib import Path
-from typing import Tuple
 
 import pytest
 import yaml
@@ -22,7 +21,7 @@ def run_compose_rename(
     new_name: str,
     old_name: str = None,
     **kwargs,
-) -> Tuple[int, str, str]:
+) -> tuple[int, str, str]:
     """Run compose-rename command."""
     import sys
 

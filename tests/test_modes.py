@@ -3,7 +3,6 @@ Tests for different volume discovery modes (labels, prefix, auto).
 """
 import subprocess
 from pathlib import Path
-from typing import Tuple
 
 import pytest
 
@@ -22,7 +21,7 @@ def run_compose_rename(
     mode: str = "auto",
     dry_run: bool = False,
     **kwargs,
-) -> Tuple[int, str, str]:
+) -> tuple[int, str, str]:
     """Run compose-rename command."""
     import sys
 

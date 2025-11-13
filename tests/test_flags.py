@@ -1,9 +1,9 @@
 """
 Tests for various flags (dry-run, skip-down, up-after, force-overwrite).
 """
+
 import subprocess
 from pathlib import Path
-from typing import Tuple
 
 import pytest
 
@@ -19,7 +19,7 @@ def run_compose_rename(
     up_after: bool = False,
     force_overwrite: bool = False,
     **kwargs,
-) -> Tuple[int, str, str]:
+) -> tuple[int, str, str]:
     """Run compose-rename command."""
     import sys
 
@@ -73,11 +73,15 @@ def test_dry_run(basic_compose_project):
     # Volumes should not be created
     for old_vol in project["volumes"]:
         new_vol = old_vol.replace(project["project_name"], new_name)
-        assert not docker_volume_exists(new_vol), f"New volume {new_vol} should not exist in dry-run"
+        assert not docker_volume_exists(new_vol), (
+            f"New volume {new_vol} should not exist in dry-run"
+        )
 
     # Original volumes should still exist
     for old_vol in project["volumes"]:
-        assert docker_volume_exists(old_vol), f"Original volume {old_vol} should still exist"
+        assert docker_volume_exists(old_vol), (
+            f"Original volume {old_vol} should still exist"
+        )
 
 
 def test_skip_down(basic_compose_project):
@@ -166,7 +170,11 @@ def test_force_overwrite_existing_volume(basic_compose_project):
     # Should succeed and copy data into existing volume
     assert rc == 0, f"Command failed: {stderr}\n{stdout}"
     # Should mention that it's copying into existing volume
-    assert "already exists" in stdout.lower() or "force-overwrite" in stdout.lower() or "copying" in stdout.lower()
+    assert (
+        "already exists" in stdout.lower()
+        or "force-overwrite" in stdout.lower()
+        or "copying" in stdout.lower()
+    )
 
     # Cleanup
     if docker_volume_exists(new_vol):
@@ -189,4 +197,3 @@ def test_dry_run_shows_plan(basic_compose_project):
     # Should mention volumes
     for vol in project["volumes"]:
         assert vol in stdout or vol.split("_")[-1] in stdout
-
