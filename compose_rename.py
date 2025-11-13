@@ -272,6 +272,16 @@ def inspect_volume(name: str, dry_run: bool) -> Dict:
     return {}
 
 
+def remove_volume(name: str, dry_run: bool):
+    """Remove a Docker volume."""
+    run(
+        ["docker", "volume", "rm", name],
+        check=True,
+        capture=True,
+        dry_run=dry_run,
+    )
+
+
 def create_volume_like(
     new_name: str, like_info: Dict, labels_extra: Dict[str, str], dry_run: bool
 ):
@@ -473,7 +483,8 @@ def main():
     ap.add_argument(
         "--force-overwrite",
         action="store_true",
-        help="If a destination volume already exists, copy into it anyway (overwrites files with same names).",
+        help="If a destination volume already exists, remove it and create a fresh copy from source. "
+        "This completely replaces the destination volume with the source data.",
     )
     ap.add_argument(
         "-V",
@@ -675,33 +686,40 @@ def main():
         print(f"  {ov}  ->  {nv}   (key: {vkey})")
 
     # Create & copy
+    skipped_volumes = []
     for ov, (nv, vkey) in mapping.items():
         print(f"\n=== Migrating volume: {ov} -> {nv} ===")
         # Inspect source volume now (driver/options/labels)
         src_info = inspect_volume(ov, dry_run=args.dry_run)
         src_labels = src_info.get("Labels") or {}
         if ensure_volume_exists(nv, dry_run=args.dry_run):
-            print(f"Destination volume already exists: {nv}")
+            print(f"⚠️  WARNING: Destination volume already exists: {nv}")
             if not args.force_overwrite:
                 print(
-                    "  Use --force-overwrite to copy into it anyway. Skipping this volume."
+                    "  Use --force-overwrite to remove and replace it. Skipping this volume."
                 )
+                skipped_volumes.append((ov, nv))
                 continue
             else:
-                print("  --force-overwrite set: will copy into existing destination.")
-        else:
-            labels_extra = {
-                "com.docker.compose.project": new_project,
-                # Compose will set this itself on create; we mimic for convenience:
-                "com.docker.compose.volume": vkey,
-                "migrated_from": ov,
-            }
-            # also carry over compose version if present
-            if "com.docker.compose.version" in src_labels:
-                labels_extra["com.docker.compose.version"] = src_labels[
-                    "com.docker.compose.version"
-                ]
-            create_volume_like(nv, src_info, labels_extra, dry_run=args.dry_run)
+                print(
+                    "  --force-overwrite set: removing existing destination volume..."
+                )
+                remove_volume(nv, dry_run=args.dry_run)
+                print("  Creating fresh destination volume...")
+
+        # Create the volume (either it didn't exist, or we just removed it)
+        labels_extra = {
+            "com.docker.compose.project": new_project,
+            # Compose will set this itself on create; we mimic for convenience:
+            "com.docker.compose.volume": vkey,
+            "migrated_from": ov,
+        }
+        # also carry over compose version if present
+        if "com.docker.compose.version" in src_labels:
+            labels_extra["com.docker.compose.version"] = src_labels[
+                "com.docker.compose.version"
+            ]
+        create_volume_like(nv, src_info, labels_extra, dry_run=args.dry_run)
 
         print("Copying data ...")
         copy_volume_data(ov, nv, dry_run=args.dry_run)
@@ -756,6 +774,19 @@ def main():
                 f"  docker compose --project-directory {project_dir} -f {compose_path} -p {new_project} up -d",
                 file=sys.stderr,
             )
+
+    # Summary of skipped volumes
+    if skipped_volumes:
+        print("\n" + "=" * 70)
+        print("⚠️  SUMMARY: Volumes that were skipped (destination already existed):")
+        print("=" * 70)
+        for ov, nv in skipped_volumes:
+            print(f"  • {ov} -> {nv}")
+        print(f"\nTotal skipped: {len(skipped_volumes)} volume(s)")
+        print(
+            "Use --force-overwrite to remove and replace existing volumes with source data."
+        )
+        print("=" * 70)
 
     print("\nDone.")
     print(
